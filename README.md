@@ -15,26 +15,33 @@ A command-line tool for managing Langflow environments and resources. This CLI p
 ### Prerequisites
 
 - Python 3.8 or higher
-- [uv](https://github.com/astral-sh/uv) package manager
+- pip or [uv](https://github.com/astral-sh/uv) package manager
 
-### Install from Source
+### Install from PyPI
 
-1. Clone the repository:
+The easiest way to install Langflow CLI:
+
 ```bash
-git clone <repository-url>
-cd langflow-cli
+pip install langflow-cli
 ```
 
-2. Install dependencies and the CLI:
+Or using `uv`:
+
 ```bash
-uv sync
-uv pip install -e .
+uv pip install langflow-cli
 ```
 
-3. Verify installation:
+### Verify Installation
+
+After installation, verify the CLI is available:
+
 ```bash
 langflow-cli --help
 ```
+
+### Other Installation Methods
+
+For development or other installation methods (installing from source, git, etc.), see [DEVELOPING.md](DEVELOPING.md).
 
 ## Configuration
 
@@ -143,40 +150,11 @@ langflow-cli flows list --profile dev
 langflow-cli projects list --profile prod
 ```
 
-## Project Structure
-
-```
-langflow-cli/
-├── langflow_cli/
-│   ├── __init__.py
-│   ├── cli.py                 # Main CLI entry point
-│   ├── config.py              # Configuration management
-│   ├── api_client.py          # Langflow API client
-│   ├── commands/
-│   │   ├── __init__.py
-│   │   ├── env.py             # Environment management commands
-│   │   ├── settings.py        # Settings commands
-│   │   ├── flows.py           # Flow commands
-│   │   └── projects.py        # Project commands
-│   └── utils.py               # Utility functions
-├── README.md
-└── pyproject.toml
-```
-
-## Development
-
-### Setup Development Environment
-
-```bash
-uv sync
-uv pip install -e .
-```
-
-### Running Tests
-
-(Add test instructions when tests are added)
-
 ## License
 
-(Add license information)
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Contributing
+
+Contributions are welcome! For development setup and contribution guidelines, see [DEVELOPING.md](DEVELOPING.md).
 
