@@ -19,12 +19,13 @@ def flows():
 
 
 @flows.command()
+@click.option("--project-id", help="Filter flows by project ID")
 @click.option("--profile", help="Profile to use (overrides default)")
-def list(profile: str):
-    """List all flows."""
+def list(project_id: str, profile: str):
+    """List all flows, optionally filtered by project ID."""
     try:
         client = LangflowAPIClient(profile_name=profile if profile else None)
-        flows_list = client.list_flows()
+        flows_list = client.list_flows(project_id=project_id)
         projects_list = client.list_projects()
         
         if not flows_list:

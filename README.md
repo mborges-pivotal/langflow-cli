@@ -102,6 +102,9 @@ When creating flows, the CLI automatically checks if the flow's `last_tested_ver
 # List all flows
 langflow-cli flows list
 
+# List flows filtered by project ID
+langflow-cli flows list --project-id <project_id>
+
 # Get flow details
 langflow-cli flows get <flow_id>
 
@@ -138,6 +141,12 @@ langflow-cli projects list
 
 # Get project details
 langflow-cli projects get <project_id>
+
+# List all flows for a project
+langflow-cli projects list-flows <project_id>
+
+# Export a project as a zip file (contains project.json and all flows as JSON files)
+langflow-cli projects export <project_id> --file project_backup.zip
 
 # Create a new project
 langflow-cli projects create --name "My Project" --data '{"description": "A test project"}'

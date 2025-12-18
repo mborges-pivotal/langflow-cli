@@ -1,7 +1,10 @@
 """Project management commands."""
 
 import json
+import zipfile
+import tempfile
 import click
+from pathlib import Path
 from rich.console import Console
 from rich.table import Table
 from langflow_cli.api_client import LangflowAPIClient
@@ -115,5 +118,109 @@ def delete(project_id: str, profile: str):
         console.print(f"[green]✓[/green] Project '{project_id}' deleted successfully")
     except Exception as e:
         console.print(f"[red]✗[/red] Failed to delete project: {str(e)}")
+        raise click.Abort()
+
+
+@projects.command()
+@click.argument("project_id")
+@click.option("--profile", help="Profile to use (overrides default)")
+def list_flows(project_id: str, profile: str):
+    """List all flows for a specific project."""
+    try:
+        client = LangflowAPIClient(profile_name=profile if profile else None)
+        flows_list = client.list_flows(project_id=project_id)
+        
+        if not flows_list:
+            console.print(f"[yellow]No flows found for project '{project_id}'.[/yellow]")
+            return
+        
+        table = Table(title=f"Flows for Project {project_id}")
+        table.add_column("ID", style="cyan")
+        table.add_column("Name", style="magenta")
+        table.add_column("Description", style="green")
+        
+        for flow in flows_list:
+            flow_id = flow.get("id", flow.get("flow_id", "N/A"))
+            flow_name = flow.get("name", "Unnamed")
+            flow_description = flow.get("description", "N/A")
+            table.add_row(str(flow_id), flow_name, flow_description or "N/A")
+        
+        console.print(table)
+    except Exception as e:
+        console.print(f"[red]✗[/red] Failed to list flows: {str(e)}")
+        raise click.Abort()
+
+
+@projects.command()
+@click.argument("project_id")
+@click.option("--file", type=click.Path(path_type=Path), required=True, help="Output file path for the zip file")
+@click.option("--profile", help="Profile to use (overrides default)")
+def export(project_id: str, file: Path, profile: str):
+    """Export a project as a zip file containing all flows as JSON files."""
+    try:
+        client = LangflowAPIClient(profile_name=profile if profile else None)
+        
+        console.print(f"[cyan]Fetching project '{project_id}'...[/cyan]")
+        
+        # Get project details
+        project = client.get_project(project_id)
+        project_name = project.get("name", project_id)
+        
+        # Get all flows for this project
+        console.print(f"[cyan]Fetching flows for project...[/cyan]")
+        flows_list = client.list_flows(project_id=project_id)
+        
+        if not flows_list:
+            console.print(f"[yellow]No flows found for project '{project_id}'.[/yellow]")
+            # Still create a zip with just the project info
+            flows_list = []
+        
+        # Create a temporary directory to store JSON files
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            
+            # Save project info as JSON
+            project_file = temp_path / "project.json"
+            with open(project_file, 'w', encoding='utf-8') as f:
+                json.dump(project, f, indent=2, ensure_ascii=False)
+            
+            # Save each flow as a JSON file
+            flows_dir = temp_path / "flows"
+            flows_dir.mkdir(exist_ok=True)
+            
+            for flow in flows_list:
+                flow_id = flow.get("id", flow.get("flow_id", "unknown"))
+                flow_name = flow.get("name", "unnamed_flow")
+                # Sanitize filename
+                safe_name = "".join(c for c in flow_name if c.isalnum() or c in (' ', '-', '_')).strip()
+                safe_name = safe_name.replace(' ', '_')[:50]  # Limit length
+                flow_filename = f"{safe_name}_{flow_id}.json"
+                flow_file = flows_dir / flow_filename
+                
+                with open(flow_file, 'w', encoding='utf-8') as f:
+                    json.dump(flow, f, indent=2, ensure_ascii=False)
+            
+            # Create zip file
+            console.print(f"[cyan]Creating zip file...[/cyan]")
+            
+            # Ensure the output directory exists
+            file.parent.mkdir(parents=True, exist_ok=True)
+            
+            with zipfile.ZipFile(file, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                # Add project file
+                zipf.write(project_file, "project.json")
+                
+                # Add all flow files
+                for flow_file in flows_dir.glob("*.json"):
+                    zipf.write(flow_file, f"flows/{flow_file.name}")
+            
+            file_size = file.stat().st_size / 1024  # Size in KB
+            console.print(f"[green]✓[/green] Project exported successfully to: {file}")
+            console.print(f"[dim]Project: {project_name}[/dim]")
+            console.print(f"[dim]Flows exported: {len(flows_list)}[/dim]")
+            console.print(f"[dim]File size: {file_size:.2f} KB[/dim]")
+            
+    except Exception as e:
+        console.print(f"[red]✗[/red] Failed to export project: {str(e)}")
         raise click.Abort()
 

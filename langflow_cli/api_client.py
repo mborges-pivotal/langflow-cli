@@ -97,13 +97,33 @@ class LangflowAPIClient:
         return self._request("GET", "/api/v1/version")
     
     # Flow methods
-    def list_flows(self) -> List[Dict[str, Any]]:
-        """List all flows."""
+    def list_flows(self, project_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        List all flows, optionally filtered by project ID.
+        
+        Args:
+            project_id: Optional project ID to filter flows by
+            
+        Returns:
+            List of flow dictionaries
+        """
         response = self._request("GET", "/api/v1/flows/")
         # API might return a list directly or wrapped in an object
         if isinstance(response, list):
-            return response
-        return response.get("flows", [])
+            flows = response
+        else:
+            flows = response.get("flows", [])
+        
+        # Filter by project_id if provided
+        if project_id:
+            filtered_flows = []
+            for flow in flows:
+                flow_project_id = flow.get("folder_id") or flow.get("project_id")
+                if str(flow_project_id) == str(project_id):
+                    filtered_flows.append(flow)
+            return filtered_flows
+        
+        return flows
     
     def get_flow(self, flow_id: str) -> Dict[str, Any]:
         """Get flow details by ID."""
@@ -151,4 +171,36 @@ class LangflowAPIClient:
     def delete_project(self, project_id: str) -> None:
         """Delete a project."""
         self._request("DELETE", f"/api/v1/projects/{project_id}")
+    
+    def download_project(self, project_id: str) -> bytes:
+        """
+        Download a project as a zip file.
+        
+        Args:
+            project_id: The project ID to download
+            
+        Returns:
+            Binary content of the zip file
+            
+        Raises:
+            requests.HTTPError: If the request fails
+        """
+        url = f"{self.base_url}/api/v1/projects/download/{project_id}"
+        
+        try:
+            response = self.session.get(url, stream=True)
+            response.raise_for_status()
+            return response.content
+        except requests.exceptions.HTTPError as e:
+            error_msg = f"HTTP {e.response.status_code}"
+            if e.response.content:
+                try:
+                    error_data = e.response.json()
+                    if "detail" in error_data:
+                        error_msg += f": {error_data['detail']}"
+                except ValueError:
+                    error_msg += f": {e.response.text}"
+            raise requests.exceptions.HTTPError(error_msg) from e
+        except requests.exceptions.RequestException as e:
+            raise requests.exceptions.RequestException(f"Request failed: {str(e)}") from e
 
