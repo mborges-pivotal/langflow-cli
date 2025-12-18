@@ -77,6 +77,9 @@ langflow-cli env select <name>
 # Show current environment
 langflow-cli env current
 
+# Show current environment version
+langflow-cli env version
+
 # Delete an environment
 langflow-cli env delete <name>
 ```
@@ -92,6 +95,8 @@ langflow-cli settings get --profile dev
 ```
 
 ### Flow Management
+
+When creating flows, the CLI automatically checks if the flow's `last_tested_version` matches the current Langflow environment version. If versions don't match, a warning is displayed and you'll be prompted to confirm before proceeding. Use `--ignore-version-check` to skip this check.
 
 ```bash
 # List all flows
@@ -114,6 +119,9 @@ langflow-cli flows create --name "My Flow" --project-name "My Project"
 
 # Create a flow from file and associate with a project
 langflow-cli flows create --file flow.json --project-name "My Project"
+
+# Create a flow and ignore version mismatch warnings
+langflow-cli flows create --file flow.json --ignore-version-check
 
 # Update a flow
 langflow-cli flows update <flow_id> --data '{"name": "Updated Name"}'

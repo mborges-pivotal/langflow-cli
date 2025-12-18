@@ -11,7 +11,8 @@ from langflow_cli.config import (
     load_profile,
     delete_profile,
 )
-from langflow_cli.utils import mask_api_key
+from langflow_cli.api_client import LangflowAPIClient
+from langflow_cli.utils import mask_api_key, print_json
 
 
 console = Console()
@@ -124,5 +125,18 @@ def delete(name: str):
         raise click.Abort()
     except Exception as e:
         console.print(f"[red]✗[/red] Failed to delete profile: {str(e)}")
+        raise click.Abort()
+
+
+@env.command()
+@click.option("--profile", help="Profile to use (overrides default)")
+def version(profile: str):
+    """Get Langflow version information for the current environment."""
+    try:
+        client = LangflowAPIClient(profile_name=profile if profile else None)
+        version_info = client.get_version()
+        print_json(version_info, console)
+    except Exception as e:
+        console.print(f"[red]✗[/red] Failed to get version: {str(e)}")
         raise click.Abort()
 

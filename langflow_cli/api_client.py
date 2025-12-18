@@ -75,6 +75,10 @@ class LangflowAPIClient:
         """Get current configuration."""
         return self._request("GET", "/api/v1/config")
     
+    def get_version(self) -> Dict[str, Any]:
+        """Get Langflow version information."""
+        return self._request("GET", "/api/v1/version")
+    
     # Flow methods
     def list_flows(self) -> List[Dict[str, Any]]:
         """List all flows."""

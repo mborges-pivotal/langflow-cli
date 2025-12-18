@@ -91,7 +91,8 @@ def get(flow_id: str, profile: str):
 @click.option("--project-id", help="Project ID to associate the flow with")
 @click.option("--project-name", help="Project name to associate the flow with")
 @click.option("--profile", help="Profile to use (overrides default)")
-def create(name: str, data: str, file: Path, project_id: str, project_name: str, profile: str):
+@click.option("--ignore-version-check", is_flag=True, help="Ignore version mismatch warning")
+def create(name: str, data: str, file: Path, project_id: str, project_name: str, profile: str, ignore_version_check: bool):
     """Create a new flow."""
     try:
         client = LangflowAPIClient(profile_name=profile if profile else None)
@@ -157,9 +158,65 @@ def create(name: str, data: str, file: Path, project_id: str, project_name: str,
             # Add to flow_data as folder_id
             flow_data["folder_id"] = resolved_project_id
         
+        # Check version compatibility if last_tested_version is present
+        if "last_tested_version" in flow_data:
+            version_info = client.get_version()
+            # Try different possible keys for version
+            current_version = version_info.get("version")
+            last_tested = flow_data.get("last_tested_version")
+
+            print(f"version_info: {version_info}")
+            print(f"current_version: {current_version}")
+            print(f"last_tested: {last_tested}")
+
+            if current_version and last_tested:
+                # Convert to strings for comparison
+                current_version_str = str(current_version).strip()
+                last_tested_str = str(last_tested).strip()
+                
+                if current_version_str != last_tested_str:
+                    console.print(
+                        f"\n[yellow]⚠[/yellow]  Version mismatch detected:\n"
+                        f"  Flow was tested with version: [cyan]{last_tested_str}[/cyan]\n"
+                        f"  Current environment version: [cyan]{current_version_str}[/cyan]\n"
+                        f"  Use [bold]--ignore-version-check[/bold] to proceed anyway.\n"
+                    )
+                    # Ask for confirmation
+                    if ignore_version_check: 
+                        console.print("[yellow]Flow creation continued with version mismatch.[/yellow]")
+                    elif not click.confirm("Continue with flow creation?"):
+                        console.print("[yellow]Flow creation cancelled.[/yellow]")
+                        raise click.Abort()
+        
         flow = client.create_flow(name, flow_data)
         console.print(f"[green]✓[/green] Flow created successfully")
-        print_json(flow, console)
+        
+        # Extract only the requested attributes
+        flow_id = flow.get("id", flow.get("flow_id", "N/A"))
+        flow_name = flow.get("name", "N/A")
+        flow_description = flow.get("description", "N/A")
+        folder_id = flow.get("folder_id", flow.get("folder_id", "N/A"))
+        
+        # Get project name
+        project_name = "N/A"
+        if folder_id and folder_id != "N/A":
+            project = next(
+                (p for p in projects_list if p.get("id", p.get("project_id")) == folder_id),
+                None
+            )
+            if project:
+                project_name = project.get("name", "N/A")
+        
+        # Create filtered response with only requested fields
+        filtered_flow = {
+            "id": flow_id,
+            "name": flow_name,
+            "description": flow_description,
+            "project_id": folder_id,
+            "project_name": project_name
+        }
+        
+        print_json(filtered_flow, console)
     except json.JSONDecodeError:
         console.print(f"[red]✗[/red] Invalid JSON in --data option")
         raise click.Abort()
