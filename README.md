@@ -221,33 +221,45 @@ langflow-cli git checkout main --remote origin
 
 Flows are stored in the repository organized by project folders: `{project_name}/{flow_name}_{flow_id}.json`
 
-**Push a flow to GitHub:**
+**Push a flow or project to GitHub:**
 ```bash
-# Push a flow (uses current remote and branch)
-langflow-cli git push <flow_id>
+# Push a single flow (uses current remote and branch)
+langflow-cli git push --flow-id <flow_id>
 
-# Push with a custom commit message
-langflow-cli git push <flow_id> --message "Add new flow"
+# Push a flow with a custom commit message
+langflow-cli git push --flow-id <flow_id> --message "Add new flow"
+
+# Push a project (all flows in the project) by project ID
+langflow-cli git push --project-id <project_id>
+
+# Push a project by project name
+langflow-cli git push --project-name "My Project"
+
+# Push only project.json (metadata) without flows
+langflow-cli git push --project-name "My Project" --project-only
 
 # Push to a specific remote and branch
-langflow-cli git push <flow_id> --remote origin --branch main --message "Update flow"
+langflow-cli git push --flow-id <flow_id> --remote origin --branch main --message "Update flow"
+
+# Push a project with a custom commit message
+langflow-cli git push --project-name "My Project" --message "Update all flows"
+
+# Push only project metadata with a custom message
+langflow-cli git push --project-id <project_id> --project-only --message "Update project metadata"
 
 # Note: Flows without a project are stored in the _no_project/ folder
 ```
 
 **Pull a flow from GitHub:**
 ```bash
-# Pull a flow by full path
+# Pull a flow by full path (required format: ProjectName/FlowName_id.json)
 langflow-cli git pull "My_Project/My_Flow_abc-123-def.json"
-
-# Pull by filename (searches all project folders)
-langflow-cli git pull "My_Flow_abc-123-def.json" --project-name "My Project"
 
 # Pull and create/update in a specific project
 langflow-cli git pull "Other_Project/Some_Flow_xyz.json" --project-name "My Project"
 
 # Pull with project ID
-langflow-cli git pull "My_Flow_abc-123-def.json" --project-id "123e4567-e89b-12d3-a456-426614174000"
+langflow-cli git pull "My_Project/My_Flow_abc-123-def.json" --project-id "123e4567-e89b-12d3-a456-426614174000"
 
 # Pull from a specific remote and branch
 langflow-cli git pull "My_Project/My_Flow.json" --remote origin --branch main
@@ -266,7 +278,10 @@ langflow-cli git remote select origin
 langflow-cli git checkout main
 
 # 3. Push a flow
-langflow-cli git push abc-123-def --message "Add new flow"
+langflow-cli git push --flow-id abc-123-def --message "Add new flow"
+
+# Or push an entire project
+langflow-cli git push --project-name "My Project" --message "Update all flows"
 
 # 4. Pull a flow
 langflow-cli git pull "My_Project/My_Flow_abc-123-def.json"
