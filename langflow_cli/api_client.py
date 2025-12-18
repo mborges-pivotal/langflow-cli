@@ -67,8 +67,25 @@ class LangflowAPIClient:
                 except ValueError:
                     error_msg += f": {e.response.text}"
             raise requests.exceptions.HTTPError(error_msg) from e
+        except requests.exceptions.SSLError as e:
+            if "WRONG_VERSION_NUMBER" in str(e):
+                error_msg = (
+                    f"SSL Error: {str(e)}\n"
+                    "This usually happens when an HTTPS request is made to an HTTP server. "
+                    "Try re-registering your environment using 'http://' instead of 'https://'."
+                )
+                raise requests.exceptions.SSLError(error_msg) from e
+            raise requests.exceptions.SSLError(f"SSL Error: {str(e)}") from e
         except requests.exceptions.RequestException as e:
-            raise requests.exceptions.RequestException(f"Request failed: {str(e)}") from e
+            error_string = str(e)
+            if "WRONG_VERSION_NUMBER" in error_string:
+                hint = (
+                    "\n\n[bold yellow]Hint:[/bold yellow] This SSL error typically means you're trying to reach an HTTP server using HTTPS.\n"
+                    "Try re-registering your environment using 'http://' instead of 'https://':\n"
+                    "  langflow-cli env register local --url http://localhost:7860 --api-key <your-key>"
+                )
+                raise requests.exceptions.RequestException(f"Request failed: {error_string}{hint}") from e
+            raise requests.exceptions.RequestException(f"Request failed: {error_string}") from e
     
     # Settings methods
     def get_config(self) -> Dict[str, Any]:
