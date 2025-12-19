@@ -30,17 +30,19 @@ def _ensure_git_config_file() -> None:
             config.write(f)
 
 
-def add_remote(remote_name: str, url: str, auth_method: str = "gh_cli", token: Optional[str] = None) -> None:
+def add_remote(remote_name: str, url: str, token: str) -> None:
     """
     Add or update a Git remote.
     
     Args:
         remote_name: Name of the remote (e.g., "origin")
         url: Repository URL (must be a GitHub URL)
-        auth_method: Authentication method ("gh_cli" or "token")
-        token: Optional token for token-based auth
+        token: GitHub personal access token (required)
     """
     _ensure_git_config_file()
+    
+    if not token:
+        raise ValueError("Token is required for GitHub authentication")
     
     # Validate GitHub URL (HTTPS, HTTP, or SSH)
     # HTTPS: https://github.com/... or https://<domain>/...
@@ -59,13 +61,11 @@ def add_remote(remote_name: str, url: str, auth_method: str = "gh_cli", token: O
         config.add_section(remote_section)
     
     config.set(remote_section, "url", url)
-    config.set(remote_section, "auth_method", auth_method)
+    config.set(remote_section, "token", token)
     
-    if token and auth_method == "token":
-        config.set(remote_section, "token", token)
-    elif config.has_option(remote_section, "token") and auth_method == "gh_cli":
-        # Remove token if switching to gh_cli
-        config.remove_option(remote_section, "token")
+    # Remove auth_method if it exists (for backward compatibility)
+    if config.has_option(remote_section, "auth_method"):
+        config.remove_option(remote_section, "auth_method")
     
     with open(get_git_config_path(), "w") as f:
         config.write(f)
@@ -82,10 +82,10 @@ def get_remote(remote_name: str) -> Dict[str, str]:
         remote_name: Name of the remote
         
     Returns:
-        Dictionary with url, auth_method, and optionally token
+        Dictionary with url and token
         
     Raises:
-        ValueError: If remote doesn't exist
+        ValueError: If remote doesn't exist or token is missing
     """
     _ensure_git_config_file()
     config = configparser.ConfigParser()
@@ -97,11 +97,12 @@ def get_remote(remote_name: str) -> Dict[str, str]:
     
     result = {
         "url": config.get(remote_section, "url"),
-        "auth_method": config.get(remote_section, "auth_method", fallback="gh_cli"),
     }
     
     if config.has_option(remote_section, "token"):
         result["token"] = config.get(remote_section, "token")
+    else:
+        raise ValueError(f"Remote '{remote_name}' is missing a token. Please re-add the remote with a token.")
     
     return result
 

@@ -194,7 +194,7 @@ The Git commands allow you to sync flows between Langflow and GitHub repositorie
 
 **Prerequisites:**
 - A GitHub repository
-- (GitHub CLI)[https://cli.github.com/] (`gh`) installed and authenticated, OR a GitHub personal access token
+- A GitHub personal access token
 
 **Configuration:**
 Git configuration is stored in `~/.langflow-cli/git_config`:
@@ -204,20 +204,17 @@ Git configuration is stored in `~/.langflow-cli/git_config`:
 #### Remote Management
 
 ```bash
-# Register a new remote (origin) with HTTPS URL - uses GitHub CLI authentication by default
-langflow-cli git remote add origin https://github.com/user/flows-repo
+# Register a new remote (origin) with HTTPS URL and token
+langflow-cli git remote add origin https://github.com/user/flows-repo --token YOUR_TOKEN
 
-# Register a remote with SSH URL
-langflow-cli git remote add origin git@github.com:user/flows-repo.git
+# Register a remote with SSH URL and token
+langflow-cli git remote add origin git@github.com:user/flows-repo.git --token YOUR_TOKEN
 
-# Register a remote with custom domain (GitHub Enterprise)
-langflow-cli git remote add origin git@github-ibm:user/flows-repo.git
+# Register a remote with custom domain (GitHub Enterprise) and token
+langflow-cli git remote add origin git@github-ibm:user/flows-repo.git --token YOUR_TOKEN
 
-# Register a remote with HTTPS URL for GitHub Enterprise
-langflow-cli git remote add origin https://github-ibm.com/user/flows-repo
-
-# Register a remote with token authentication
-langflow-cli git remote add origin https://github.com/user/flows-repo --auth-method token --token YOUR_TOKEN
+# Register a remote with HTTPS URL for GitHub Enterprise and token
+langflow-cli git remote add origin https://github-ibm.com/user/flows-repo --token YOUR_TOKEN
 
 # List all registered remotes
 langflow-cli git remote list
@@ -298,8 +295,8 @@ langflow-cli git pull "My_Project/My_Flow.json" --ignore-version-check
 
 **Example workflow:**
 ```bash
-# 1. Register a remote
-langflow-cli git remote add origin https://github.com/user/flows-repo
+# 1. Register a remote with token
+langflow-cli git remote add origin https://github.com/user/flows-repo --token YOUR_TOKEN
 
 # 2. Select remote and branch
 langflow-cli git remote select origin

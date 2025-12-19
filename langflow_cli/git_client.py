@@ -1,7 +1,6 @@
 """GitHub API client for repository operations."""
 
 import json
-import subprocess
 import re
 from typing import List, Optional, Dict, Any
 from github import Github
@@ -24,8 +23,10 @@ class GitHubClient:
         """
         remote_config = get_remote(remote_name)
         self.url = remote_config["url"]
-        self.auth_method = remote_config.get("auth_method", "gh_cli")
         self.token = remote_config.get("token")
+        
+        if not self.token:
+            raise ValueError("Token required for GitHub authentication. Please provide a token when adding the remote.")
         
         # Extract domain, owner and repo from URL
         # Support both HTTPS and SSH formats:
@@ -55,55 +56,13 @@ class GitHubClient:
             # Assume HTTPS and standard /api/v3 path
             self.base_url = f"https://{self.domain}/api/v3"
         
-        # Initialize GitHub client
-        if self.auth_method == "gh_cli":
-            self.github = self._init_with_gh_cli()
-        elif self.auth_method == "token":
-            if not self.token:
-                raise ValueError("Token required for token-based authentication")
-            if self.base_url:
-                self.github = Github(base_url=self.base_url, login_or_token=self.token)
-            else:
-                self.github = Github(self.token)
+        # Initialize GitHub client with token
+        if self.base_url:
+            self.github = Github(base_url=self.base_url, login_or_token=self.token)
         else:
-            raise ValueError(f"Unknown auth method: {self.auth_method}")
+            self.github = Github(self.token)
         
         self.repo = self.github.get_repo(f"{self.owner}/{self.repo_name}")
-    
-    def _init_with_gh_cli(self) -> Github:
-        """
-        Initialize GitHub client using GitHub CLI authentication.
-        
-        Returns:
-            Authenticated Github instance
-            
-        Raises:
-            ValueError: If gh CLI is not available or not authenticated
-        """
-        try:
-            # Try to get token from gh CLI
-            # For GitHub Enterprise, gh CLI should be configured with the hostname
-            result = subprocess.run(
-                ["gh", "auth", "token"],
-                capture_output=True,
-                text=True,
-                check=True
-            )
-            token = result.stdout.strip()
-            
-            # Use base_url for GitHub Enterprise, None for github.com
-            if self.base_url:
-                return Github(base_url=self.base_url, login_or_token=token)
-            else:
-                return Github(token)
-        except subprocess.CalledProcessError:
-            raise ValueError(
-                "GitHub CLI authentication failed. Please run 'gh auth login' first."
-            )
-        except FileNotFoundError:
-            raise ValueError(
-                "GitHub CLI (gh) not found. Please install it or use token-based authentication."
-            )
     
     def get_branches(self) -> List[str]:
         """

@@ -41,19 +41,13 @@ def remote():
 @remote.command("add")
 @click.argument("name")
 @click.argument("url")
-@click.option("--auth-method", type=click.Choice(["gh_cli", "token"]), default="gh_cli", help="Authentication method")
-@click.option("--token", help="GitHub token (required if auth-method is token)")
-def remote_add(name: str, url: str, auth_method: str, token: Optional[str]):
+@click.option("--token", required=True, help="GitHub personal access token (required)")
+def remote_add(name: str, url: str, token: str):
     """Register a new remote (origin)."""
     try:
-        if auth_method == "token" and not token:
-            console.print("[red]✗[/red] Token required when using token authentication")
-            raise click.Abort()
-        
-        add_remote(name, url, auth_method, token)
+        add_remote(name, url, token)
         console.print(f"[green]✓[/green] Remote '{name}' added successfully")
         console.print(f"[dim]URL: {url}[/dim]")
-        console.print(f"[dim]Auth method: {auth_method}[/dim]")
     except ValueError as e:
         console.print(f"[red]✗[/red] {str(e)}")
         raise click.Abort()
@@ -75,13 +69,11 @@ def remote_list():
         table = Table(title="Git Remotes")
         table.add_column("Name", style="cyan")
         table.add_column("URL", style="green")
-        table.add_column("Auth Method", style="magenta")
         
         for name, config in remotes.items():
             table.add_row(
                 name,
-                config["url"],
-                config.get("auth_method", "gh_cli")
+                config["url"]
             )
         
         console.print(table)
