@@ -100,12 +100,13 @@ class LangflowAPIClient:
     def list_flows(self, project_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         List all flows, optionally filtered by project ID.
+        Flows are enriched with project_id and project_name.
         
         Args:
             project_id: Optional project ID to filter flows by
             
         Returns:
-            List of flow dictionaries
+            List of flow dictionaries, each enriched with project_id and project_name
         """
         response = self._request("GET", "/api/v1/flows/")
         # API might return a list directly or wrapped in an object
@@ -121,7 +122,37 @@ class LangflowAPIClient:
                 flow_project_id = flow.get("folder_id") or flow.get("project_id")
                 if str(flow_project_id) == str(project_id):
                     filtered_flows.append(flow)
-            return filtered_flows
+            flows = filtered_flows
+        
+        # Enrich flows with project information
+        projects_list = self.list_projects()
+        projects_dict = {}
+        for project in projects_list:
+            proj_id = project.get("id", project.get("project_id"))
+            if proj_id:
+                projects_dict[str(proj_id)] = project
+        
+        # Add project_id and project_name to each flow
+        for flow in flows:
+            flow_project_id = flow.get("folder_id") or flow.get("project_id")
+            if flow_project_id:
+                # Ensure project_id is set
+                flow["project_id"] = str(flow_project_id)
+                # Add project_name if project exists
+                project = projects_dict.get(str(flow_project_id))
+                if project:
+                    flow["project_name"] = project.get("name", "N/A")
+                else:
+                    flow["project_name"] = "N/A"
+            else:
+                flow["project_id"] = None
+                flow["project_name"] = "N/A"
+        
+        # Sort by project name first, then flow name (case-insensitive)
+        flows.sort(key=lambda x: (
+            (x.get('project_name', 'N/A') or 'N/A').lower() if x.get('project_name') != "N/A" else "zzz",
+            (x.get('name', 'Unnamed') or 'Unnamed').lower()
+        ))
         
         return flows
     

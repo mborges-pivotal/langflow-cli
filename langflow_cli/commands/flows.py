@@ -6,7 +6,8 @@ from pathlib import Path
 from rich.console import Console
 from rich.table import Table
 from langflow_cli.api_client import LangflowAPIClient
-from langflow_cli.utils import print_json
+from langflow_cli.utils import print_json, resolve_project_id, validate_project_id
+from langflow_cli.flow_checks import validate_flow_with_checks, FlowCheck
 
 
 console = Console()
@@ -20,36 +21,23 @@ def flows():
 
 @flows.command()
 @click.option("--project-id", help="Filter flows by project ID")
+@click.option("--project-name", help="Filter flows by project name")
 @click.option("--profile", help="Profile to use (overrides default)")
-def list(project_id: str, profile: str):
-    """List all flows, optionally filtered by project ID."""
+def list(project_id: str, project_name: str, profile: str):
+    """List all flows, optionally filtered by project ID or project name."""
     try:
         client = LangflowAPIClient(profile_name=profile if profile else None)
-        flows_list = client.list_flows(project_id=project_id)
-        projects_list = client.list_projects()
+        
+        # Resolve project ID if project-name is provided
+        if project_name and project_id:
+            console.print("[yellow]Warning: Both --project-id and --project-name specified. Using --project-name.[/yellow]")
+        
+        resolved_project_id = resolve_project_id(project_id, project_name, client)
+        flows_list = client.list_flows(project_id=resolved_project_id)
         
         if not flows_list:
             console.print("[yellow]No flows found.[/yellow]")
             return
-        
-        # Enrich flows with project information and sort by project name
-        enriched_flows = []
-        for flow in flows_list:
-            flow_id = flow.get("id", flow.get("flow_id", "N/A"))
-            flow_name = flow.get("name", "Unnamed")
-            project_id = flow.get("folder_id", flow.get("project_id", "N/A"))
-            project_name = next((p['name'] for p in projects_list if p['id'] == project_id), "N/A")
-            
-            enriched_flows.append({
-                'flow_id': flow_id,
-                'flow_name': flow_name,
-                'project_id': project_id,
-                'project_name': project_name,
-                'flow_data': flow  # Keep original flow data
-            })
-        
-        # Sort by project name (case-insensitive)
-        enriched_flows.sort(key=lambda x: x['project_name'].lower() if x['project_name'] != "N/A" else "zzz")
         
         table = Table(title="Flows")
         table.add_column("Project ID", style="green")
@@ -57,12 +45,17 @@ def list(project_id: str, profile: str):
         table.add_column("ID", style="cyan")
         table.add_column("Name", style="magenta")
         
-        for enriched_flow in enriched_flows:
+        for flow in flows_list:
+            flow_id = flow.get("id", flow.get("flow_id", "N/A"))
+            flow_name = flow.get("name", "Unnamed")
+            project_id = flow.get("project_id", "N/A")
+            project_name = flow.get("project_name", "N/A")
+            
             table.add_row(
-                str(enriched_flow['project_id']),
-                enriched_flow['project_name'],
-                str(enriched_flow['flow_id']),
-                enriched_flow['flow_name']
+                str(project_id),
+                project_name,
+                str(flow_id),
+                flow_name
             )
 
         console.print(table)
@@ -117,36 +110,13 @@ def create(name: str, data: str, file: Path, project_id: str, project_name: str,
         if name:
             flow_data["name"] = name
 
-        projects_list = client.list_projects()
-        
-        # Helper function to validate project ID exists
-        def validate_project_id(pid: str) -> bool:
-            """Check if a project ID exists in the projects list."""
-            if not pid:
-                return False
-            project_ids = [
-                str(p.get("id", p.get("project_id", ""))) 
-                for p in projects_list
-            ]
-            return str(pid) in project_ids
-        
         # Handle project-id and project-name parameters (command-line takes precedence)
-        resolved_project_id = None
+        resolved_project_id = resolve_project_id(project_id, project_name, client)
         
-        if project_id:
-            # Validate project-id immediately
-            if not validate_project_id(project_id):
-                raise ValueError(f"Project not found: {project_id}")
-            resolved_project_id = project_id
-        elif project_name:
-            # Find project by name
-            matching_project = next(
-                (p for p in projects_list if p.get("name") == project_name),
-                None
-            )
-            if not matching_project:
-                raise ValueError(f"Project not found: {project_name}")
-            resolved_project_id = matching_project.get("id", matching_project.get("project_id"))
+        if resolved_project_id:
+            # Validate project-id
+            if not validate_project_id(resolved_project_id, client):
+                raise ValueError(f"Project not found: {resolved_project_id}")
         
         # If no command-line project specified, check flow_data
         if not resolved_project_id:
@@ -154,40 +124,19 @@ def create(name: str, data: str, file: Path, project_id: str, project_name: str,
         
         # Validate project exists if project_id is provided (from flow_data or resolved)
         if resolved_project_id:
-            if not validate_project_id(resolved_project_id):
+            if not validate_project_id(resolved_project_id, client):
                 raise ValueError(f"Project not found: {resolved_project_id}")
             # Add to flow_data as folder_id
             flow_data["folder_id"] = resolved_project_id
         
-        # Check version compatibility if last_tested_version is present
-        if "last_tested_version" in flow_data:
-            version_info = client.get_version()
-            # Try different possible keys for version
-            current_version = version_info.get("version")
-            last_tested = flow_data.get("last_tested_version")
-
-            print(f"version_info: {version_info}")
-            print(f"current_version: {current_version}")
-            print(f"last_tested: {last_tested}")
-
-            if current_version and last_tested:
-                # Convert to strings for comparison
-                current_version_str = str(current_version).strip()
-                last_tested_str = str(last_tested).strip()
-                
-                if current_version_str != last_tested_str:
-                    console.print(
-                        f"\n[yellow]⚠[/yellow]  Version mismatch detected:\n"
-                        f"  Flow was tested with version: [cyan]{last_tested_str}[/cyan]\n"
-                        f"  Current environment version: [cyan]{current_version_str}[/cyan]\n"
-                        f"  Use [bold]--ignore-version-check[/bold] to proceed anyway.\n"
-                    )
-                    # Ask for confirmation
-                    if ignore_version_check: 
-                        console.print("[yellow]Flow creation continued with version mismatch.[/yellow]")
-                    elif not click.confirm("Continue with flow creation?"):
-                        console.print("[yellow]Flow creation cancelled.[/yellow]")
-                        raise click.Abort()
+        # Run flow validation checks
+        validate_flow_with_checks(
+            flow_data,
+            client,
+            checks=[FlowCheck.LAST_TESTED_VERSION],  # Run all checks
+            ignore_failures=ignore_version_check,
+            console=console
+        )
         
         flow = client.create_flow(name, flow_data)
         console.print(f"[green]✓[/green] Flow created successfully")
@@ -199,6 +148,7 @@ def create(name: str, data: str, file: Path, project_id: str, project_name: str,
         folder_id = flow.get("folder_id", flow.get("folder_id", "N/A"))
         
         # Get project name
+        projects_list = client.list_projects()
         project_name = "N/A"
         if folder_id and folder_id != "N/A":
             project = next(

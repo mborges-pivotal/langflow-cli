@@ -1,6 +1,6 @@
 [project]
 name = "langflow-cli"
-version = "0.1.1"
+version = "0.1.2"
 description = "CLI tool for managing Langflow environments and resources"
 readme = "README.md"
 requires-python = ">=3.8"
@@ -41,6 +41,7 @@ classifiers = [
 
 [project.scripts]
 langflow-cli = "langflow_cli.cli:main"
+lf-cli = "langflow_cli.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/smatiolids/langflow-cli"

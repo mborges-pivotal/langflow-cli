@@ -5,6 +5,7 @@ A command-line tool for managing Langflow environments and resources. This CLI p
 ## Features
 
 - **Environment Management**: Register and manage multiple Langflow environments/profiles (similar to AWS CLI)
+- **Status**: View current environment and Git configuration at a glance
 - **Settings**: View Langflow configuration
 - **Flow Management**: List, create, update, and delete flows
 - **Project Management**: List, create, update, and delete projects
@@ -38,7 +39,11 @@ After installation, verify the CLI is available:
 
 ```bash
 langflow-cli --help
+# or use the shorter alias
+lf-cli --help
 ```
+
+**Note:** The CLI can be called with either `langflow-cli` or `lf-cli` (shorter alias).
 
 ### Other Installation Methods
 
@@ -86,6 +91,26 @@ langflow-cli env version
 langflow-cli env delete <name>
 ```
 
+### Status
+
+View the current environment and Git configuration:
+
+```bash
+# Show current status (default profile)
+langflow-cli status
+
+# Show status for a specific profile
+langflow-cli status --profile dev
+```
+
+The status command displays:
+- Current environment/profile name
+- Langflow API URL
+- API Key (masked)
+- Git Remote name
+- Git Remote URL
+- Git Branch
+
 ### Settings
 
 ```bash
@@ -106,6 +131,9 @@ langflow-cli flows list
 
 # List flows filtered by project ID
 langflow-cli flows list --project-id <project_id>
+
+# List flows filtered by project name
+langflow-cli flows list --project-name "My Project"
 
 # Get flow details
 langflow-cli flows get <flow_id>

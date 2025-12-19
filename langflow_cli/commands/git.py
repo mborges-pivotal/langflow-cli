@@ -18,7 +18,7 @@ from langflow_cli.git_config import (
 from langflow_cli.git_client import GitHubClient
 from langflow_cli.api_client import LangflowAPIClient
 from langflow_cli.config import get_default_profile
-from langflow_cli.utils import print_json
+from langflow_cli.utils import print_json, resolve_project_id
 
 
 console = Console()
@@ -263,16 +263,10 @@ def push(
             _push_flow(langflow_client, github_client, flow_id, remote_name, branch_name, message)
         else:
             # Push project (all flows or metadata only)
-            resolved_project_id = None
+            resolved_project_id = resolve_project_id(project_id, project_name, langflow_client)
             
-            if project_id:
-                resolved_project_id = project_id
-            elif project_name:
-                projects = langflow_client.list_projects()
-                project = next((p for p in projects if p.get("name") == project_name), None)
-                if not project:
-                    raise ValueError(f"Project not found: {project_name}")
-                resolved_project_id = project.get("id", project.get("project_id"))
+            if not resolved_project_id:
+                raise ValueError("Must specify either --project-id or --project-name when pushing a project")
             
             _push_project(langflow_client, github_client, resolved_project_id, remote_name, branch_name, message, project_only)
         
@@ -490,7 +484,7 @@ def _push_project(
 
 
 @git.command("pull")
-@click.argument("flow_path", help="Full path to flow file (e.g., 'ProjectName/FlowName_id.json')")
+@click.argument("flow_path", metavar="FLOW_PATH")
 @click.option("--remote", help="Remote name (overrides current selection)")
 @click.option("--branch", help="Branch name (overrides current selection)")
 @click.option("--project-id", help="Project ID to associate the flow with")
@@ -506,7 +500,10 @@ def pull(
     profile: Optional[str],
     ignore_version_check: bool
 ):
-    """Pull a flow from GitHub repository to Langflow."""
+    """Pull a flow from GitHub repository to Langflow.
+    
+    FLOW_PATH must be a full path (e.g., 'ProjectName/FlowName_id.json'), not just a filename.
+    """
     try:
         profile_name = profile or get_default_profile()
         if not profile_name:
@@ -540,29 +537,14 @@ def pull(
         
         # Get Langflow client
         langflow_client = LangflowAPIClient(profile_name=profile_name)
-        projects_list = langflow_client.list_projects()
         
         # Resolve project
-        resolved_project_id = None
+        resolved_project_id = resolve_project_id(project_id, project_name, langflow_client)
         
-        if project_id:
-            # Validate project-id
-            project_ids = [str(p.get("id", p.get("project_id", ""))) for p in projects_list]
-            if str(project_id) not in project_ids:
-                raise ValueError(f"Project not found: {project_id}")
-            resolved_project_id = project_id
-        elif project_name:
-            # Find project by name
-            matching_project = next(
-                (p for p in projects_list if p.get("name") == project_name),
-                None
-            )
-            if not matching_project:
-                raise ValueError(f"Project not found: {project_name}")
-            resolved_project_id = matching_project.get("id", matching_project.get("project_id"))
-        else:
+        # If resolved_project_id is None, try to infer from file path or flow_data
+        if not resolved_project_id:
+            projects_list = langflow_client.list_projects()
             # Try to infer from file path (project folder name)
-            # Extract project folder from path
             path_parts = file_path.split("/")
             if len(path_parts) > 1:
                 project_folder = path_parts[0]
@@ -577,12 +559,51 @@ def pull(
         if not resolved_project_id:
             resolved_project_id = flow_data.get("folder_id") or flow_data.get("project_id")
         
-        # Validate project exists if project_id is provided
+        # Check if project exists, if not, try to create it from project.json
         if resolved_project_id:
+            projects_list = langflow_client.list_projects()
             project_ids = [str(p.get("id", p.get("project_id", ""))) for p in projects_list]
             if str(resolved_project_id) not in project_ids:
-                console.print(f"[yellow]Warning: Project {resolved_project_id} not found. Flow will be created without project association.[/yellow]")
-                resolved_project_id = None
+                # Project doesn't exist, try to create it from project.json
+                console.print(f"[yellow]Project {resolved_project_id} not found. Attempting to create from project.json...[/yellow]")
+                
+                # Extract project folder from path
+                path_parts = file_path.split("/")
+                if len(path_parts) > 1:
+                    project_folder = path_parts[0]
+                    project_json_path = f"{project_folder}/project.json"
+                    
+                    try:
+                        # Try to get project.json from the repo
+                        project_json_content = github_client.get_file(project_json_path, branch_name)
+                        project_data = json.loads(project_json_content)
+                        
+                        # Remove flows attribute if present (we don't want to include flows when creating)
+                        project_data.pop("flows", None)
+                        # Remove id/project_id as the API will assign a new one
+                        project_data.pop("id", None)
+                        project_data.pop("project_id", None)
+                        
+                        # Get project name (required for creation)
+                        project_name = project_data.get("name")
+                        if not project_name:
+                            raise ValueError("Project name not found in project.json")
+                        
+                        # Create the project
+                        console.print(f"[cyan]Creating project '{project_name}' from project.json...[/cyan]")
+                        created_project = langflow_client.create_project(project_name, project_data)
+                        resolved_project_id = created_project.get("id", created_project.get("project_id"))
+                        console.print(f"[green]✓[/green] Project '{project_name}' created successfully")
+                        
+                        # Refresh projects list
+                        projects_list = langflow_client.list_projects()
+                    except Exception as e:
+                        console.print(f"[yellow]Warning: Could not create project from project.json: {str(e)}[/yellow]")
+                        console.print(f"[yellow]Flow will be created without project association.[/yellow]")
+                        resolved_project_id = None
+                else:
+                    console.print(f"[yellow]Warning: Could not determine project folder from path. Flow will be created without project association.[/yellow]")
+                    resolved_project_id = None
         
         # Update flow_data with resolved project
         if resolved_project_id:
